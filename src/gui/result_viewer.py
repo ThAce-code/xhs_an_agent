@@ -43,13 +43,17 @@ class ResultViewer(ctk.CTkFrame):
         # Tabview for different result sections
         self.tabview = ctk.CTkTabview(
             self,
-            fg_color=self.colors["background"],
-            segmented_button_fg_color=self.colors["primary"],
-            segmented_button_selected_color=self.colors["accent"],
-            segmented_button_selected_hover_color=self.colors["accent"],
-            text_color=self.colors["text_dark"]
+            fg_color="transparent",
+            segmented_button_fg_color=self.colors["tab_bg"],
+            segmented_button_selected_color=self.colors["input_bg"],
+            segmented_button_selected_hover_color=self.colors["input_bg"],
+            segmented_button_unselected_color=self.colors["tab_bg"],
+            segmented_button_unselected_hover_color=self.colors["tab_bg"],
+            text_color=self.colors["text_dark"],
+            text_color_disabled=self.colors["text_light"],
+            corner_radius=15
         )
-        self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
+        self.tabview.pack(fill="both", expand=True, padx=15, pady=15)
 
         # Add tabs
         self.tabview.add("分析")
@@ -60,55 +64,73 @@ class ResultViewer(ctk.CTkFrame):
         # Create textboxes for each tab
         self.analysis_textbox = ctk.CTkTextbox(
             self.tabview.tab("分析"),
-            fg_color="white",
-            text_color=self.colors["text_dark"]
+            fg_color=self.colors["input_bg"],
+            text_color=self.colors["text_dark"],
+            corner_radius=16,
+            font=ctk.CTkFont(size=13),
+            wrap="word"
         )
         self.analysis_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.rewrite_textbox = ctk.CTkTextbox(
             self.tabview.tab("仿写"),
-            fg_color="white",
-            text_color=self.colors["text_dark"]
+            fg_color=self.colors["input_bg"],
+            text_color=self.colors["text_dark"],
+            corner_radius=16,
+            font=ctk.CTkFont(size=13),
+            wrap="word"
         )
         self.rewrite_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.cover_textbox = ctk.CTkTextbox(
             self.tabview.tab("封面"),
-            fg_color="white",
-            text_color=self.colors["text_dark"]
+            fg_color=self.colors["input_bg"],
+            text_color=self.colors["text_dark"],
+            corner_radius=16,
+            font=ctk.CTkFont(size=13),
+            wrap="word"
         )
         self.cover_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.sources_textbox = ctk.CTkTextbox(
             self.tabview.tab("来源"),
-            fg_color="white",
-            text_color=self.colors["text_dark"]
+            fg_color=self.colors["input_bg"],
+            text_color=self.colors["text_dark"],
+            corner_radius=16,
+            font=ctk.CTkFont(size=13),
+            wrap="word"
         )
         self.sources_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Export buttons
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.pack(fill="x", padx=10, pady=(0, 10))
+        button_frame.pack(fill="x", padx=15, pady=(0, 15))
 
         export_json_btn = ctk.CTkButton(
             button_frame,
-            text="导出JSON",
-            width=100,
+            text="📄 导出JSON",
+            width=120,
+            height=36,
+            corner_radius=25,
             command=self._export_json,
             fg_color=self.colors["primary"],
-            hover_color=self.colors["accent"],
-            text_color=self.colors["text_dark"]
+            hover_color=self.colors.get("primary_hover", self.colors["primary"]),
+            text_color="white",
+            font=ctk.CTkFont(size=13, weight="bold")
         )
         export_json_btn.pack(side="left", padx=5)
 
         copy_btn = ctk.CTkButton(
             button_frame,
-            text="复制当前",
-            width=100,
+            text="📋 复制当前",
+            width=120,
+            height=36,
+            corner_radius=25,
             command=self._copy_current,
             fg_color=self.colors["primary"],
-            hover_color=self.colors["accent"],
-            text_color=self.colors["text_dark"]
+            hover_color=self.colors.get("primary_hover", self.colors["primary"]),
+            text_color="white",
+            font=ctk.CTkFont(size=13, weight="bold")
         )
         copy_btn.pack(side="left")
 
