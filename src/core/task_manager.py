@@ -69,6 +69,7 @@ class TaskManager:
             # Build executor
             executor = build_agent_executor(
                 model=options.get("gemini_model", "gemini-2.5-flash"),
+                gemini_base_url=options.get("gemini_base_url"),
                 analysis_temperature=options.get("analysis_temperature", 0.0),
                 rewrite_temperature=options.get("rewrite_temperature", 0.7),
                 cover_temperature=options.get("cover_temperature", 0.6),

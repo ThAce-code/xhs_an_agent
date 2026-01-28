@@ -108,6 +108,27 @@ class SettingsDialog(ctk.CTkToplevel):
         self.minimax_key_entry = ctk.CTkEntry(minimax_frame, show="*", width=500)
         self.minimax_key_entry.pack(padx=10, pady=(0, 10))
 
+        # Gemini Base URL (for proxy/relay)
+        gemini_url_frame = ctk.CTkFrame(tab)
+        gemini_url_frame.pack(fill="x", padx=10, pady=10)
+
+        gemini_url_label = ctk.CTkLabel(
+            gemini_url_frame,
+            text="Gemini 中转站URL (可选，留空使用官方API):"
+        )
+        gemini_url_label.pack(anchor="w", padx=10, pady=(10, 5))
+
+        self.gemini_base_url_entry = ctk.CTkEntry(gemini_url_frame, width=500)
+        self.gemini_base_url_entry.pack(padx=10, pady=(0, 5))
+
+        gemini_url_hint = ctk.CTkLabel(
+            gemini_url_frame,
+            text="示例: https://api.api2d.com/v1beta 或其他中转站地址",
+            text_color="gray",
+            font=ctk.CTkFont(size=11),
+        )
+        gemini_url_hint.pack(anchor="w", padx=10, pady=(0, 10))
+
         # Help text
         help_label = ctk.CTkLabel(
             tab,
@@ -258,6 +279,9 @@ class SettingsDialog(ctk.CTkToplevel):
         self.tavily_key_entry.insert(0, self.config_manager.get_api_key("tavily"))
         self.minimax_key_entry.insert(0, self.config_manager.get_api_key("minimax"))
 
+        # Gemini Base URL
+        self.gemini_base_url_entry.insert(0, self.config_manager.get_setting("gemini_base_url", ""))
+
         # Model Configuration
         self.gemini_model_entry.insert(0, self.config_manager.get_setting("gemini_model", "gemini-2.5-flash"))
         self.minimax_model_entry.insert(0, self.config_manager.get_setting("minimax_model", "MiniMax-M2.1"))
@@ -284,6 +308,9 @@ class SettingsDialog(ctk.CTkToplevel):
             self.config_manager.set_api_key("google", self.google_key_entry.get().strip())
             self.config_manager.set_api_key("tavily", self.tavily_key_entry.get().strip())
             self.config_manager.set_api_key("minimax", self.minimax_key_entry.get().strip())
+
+            # Save Gemini base URL
+            self.config_manager.set_setting("gemini_base_url", self.gemini_base_url_entry.get().strip())
 
             # Save model configuration
             self.config_manager.set_setting("gemini_model", self.gemini_model_entry.get().strip())

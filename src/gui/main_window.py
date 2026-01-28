@@ -224,6 +224,7 @@ class MainWindow(ctk.CTk):
             "cover": self.cover_var.get() and mode != "radar",
             "cover_image": self.cover_image_var.get() and mode != "radar",
             "gemini_model": self.config_manager.get_setting("gemini_model"),
+            "gemini_base_url": self.config_manager.get_setting("gemini_base_url"),
             "minimax_model": self.config_manager.get_setting("minimax_model"),
             "minimax_base_url": self.config_manager.get_setting("minimax_base_url"),
             "analysis_temperature": self.config_manager.get_setting("analysis_temperature"),
