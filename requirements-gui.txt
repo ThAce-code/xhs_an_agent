@@ -1,0 +1,11 @@
+# GUI-specific dependencies for desktop application
+
+# GUI framework
+customtkinter>=5.2.0
+Pillow>=10.0.0
+
+# Encryption for API keys
+cryptography>=41.0.0
+
+# Markdown rendering (optional, for future enhancement)
+markdown2>=2.4.0
