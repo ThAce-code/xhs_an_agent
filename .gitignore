@@ -1,0 +1,40 @@
+# Secrets
+.env
+
+# dotenv variants (keep example)
+.env.*
+!.env.example
+
+# Outputs
+outputs/
+
+# Logs & local caches
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Virtualenv
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+.cache/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

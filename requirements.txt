@@ -1,0 +1,10 @@
+﻿# Core runtime
+langchain
+langchain-community
+langchain-google-genai
+tavily-python
+python-dotenv
+pydantic-settings
+
+# Optional: write .xlsx reports
+openpyxl
