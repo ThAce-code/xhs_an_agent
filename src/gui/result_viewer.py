@@ -12,22 +12,43 @@ import customtkinter as ctk
 class ResultViewer(ctk.CTkFrame):
     """Result display and export widget."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, colors=None):
         """Initialize result viewer.
 
         Args:
             parent: Parent widget
+            colors: Optional color scheme dictionary
         """
         super().__init__(parent)
 
         self.current_result: dict[str, Any] | None = None
+
+        # Use provided colors or defaults
+        self.colors = colors or {
+            "primary": "#FFB7A1",
+            "secondary": "#F0D6D1",
+            "accent": "#2C2C2C",
+            "background": "#D3DEE8",
+            "text_dark": "#2C2C2C",
+            "text_light": "#FFFFFF",
+        }
+
+        # Set frame background
+        self.configure(fg_color=self.colors["secondary"])
 
         self._create_widgets()
 
     def _create_widgets(self):
         """Create all UI widgets."""
         # Tabview for different result sections
-        self.tabview = ctk.CTkTabview(self)
+        self.tabview = ctk.CTkTabview(
+            self,
+            fg_color=self.colors["background"],
+            segmented_button_fg_color=self.colors["primary"],
+            segmented_button_selected_color=self.colors["accent"],
+            segmented_button_selected_hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
+        )
         self.tabview.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Add tabs
@@ -37,16 +58,32 @@ class ResultViewer(ctk.CTkFrame):
         self.tabview.add("来源")
 
         # Create textboxes for each tab
-        self.analysis_textbox = ctk.CTkTextbox(self.tabview.tab("分析"))
+        self.analysis_textbox = ctk.CTkTextbox(
+            self.tabview.tab("分析"),
+            fg_color="white",
+            text_color=self.colors["text_dark"]
+        )
         self.analysis_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.rewrite_textbox = ctk.CTkTextbox(self.tabview.tab("仿写"))
+        self.rewrite_textbox = ctk.CTkTextbox(
+            self.tabview.tab("仿写"),
+            fg_color="white",
+            text_color=self.colors["text_dark"]
+        )
         self.rewrite_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.cover_textbox = ctk.CTkTextbox(self.tabview.tab("封面"))
+        self.cover_textbox = ctk.CTkTextbox(
+            self.tabview.tab("封面"),
+            fg_color="white",
+            text_color=self.colors["text_dark"]
+        )
         self.cover_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.sources_textbox = ctk.CTkTextbox(self.tabview.tab("来源"))
+        self.sources_textbox = ctk.CTkTextbox(
+            self.tabview.tab("来源"),
+            fg_color="white",
+            text_color=self.colors["text_dark"]
+        )
         self.sources_textbox.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Export buttons
@@ -54,11 +91,25 @@ class ResultViewer(ctk.CTkFrame):
         button_frame.pack(fill="x", padx=10, pady=(0, 10))
 
         export_json_btn = ctk.CTkButton(
-            button_frame, text="导出JSON", width=100, command=self._export_json
+            button_frame,
+            text="导出JSON",
+            width=100,
+            command=self._export_json,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         export_json_btn.pack(side="left", padx=5)
 
-        copy_btn = ctk.CTkButton(button_frame, text="复制当前", width=100, command=self._copy_current)
+        copy_btn = ctk.CTkButton(
+            button_frame,
+            text="复制当前",
+            width=100,
+            command=self._copy_current,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
+        )
         copy_btn.pack(side="left")
 
     def display_result(self, result: dict[str, Any]):

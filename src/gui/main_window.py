@@ -27,9 +27,19 @@ class MainWindow(ctk.CTk):
         self.title("小红书流量分析助手")
         self.geometry("1000x800")
 
-        # Set theme
+        # Set theme - Sunset Mood
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
+
+        # Custom color scheme - Sunset Mood
+        self.colors = {
+            "primary": "#FFB7A1",      # HORIZON - 奶油杏
+            "secondary": "#F0D6D1",    # TRANSITION - 柔粉色
+            "accent": "#2C2C2C",       # ACCENT - 深炭灰
+            "background": "#D3DEE8",   # TOP SKY - 雾霾蓝
+            "text_dark": "#2C2C2C",    # 深色文字
+            "text_light": "#FFFFFF",   # 浅色文字
+        }
 
         # Initialize managers
         self.config_manager = ConfigManager()
@@ -48,42 +58,69 @@ class MainWindow(ctk.CTk):
 
     def _create_widgets(self):
         """Create all UI widgets."""
+        # Set window background color
+        self.configure(fg_color=self.colors["background"])
+
         # Configure grid
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
         # Header frame
-        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame = ctk.CTkFrame(self, fg_color=self.colors["secondary"])
         header_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
 
         title_label = ctk.CTkLabel(
-            header_frame, text="小红书流量分析助手", font=ctk.CTkFont(size=24, weight="bold")
+            header_frame,
+            text="小红书流量分析助手",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=self.colors["text_dark"]
         )
-        title_label.pack(side="left")
+        title_label.pack(side="left", padx=10, pady=10)
 
         settings_btn = ctk.CTkButton(
-            header_frame, text="设置", width=80, command=self._open_settings
+            header_frame,
+            text="设置",
+            width=80,
+            command=self._open_settings,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         settings_btn.pack(side="right", padx=5)
 
         history_btn = ctk.CTkButton(
-            header_frame, text="历史记录", width=100, command=self._open_history
+            header_frame,
+            text="历史记录",
+            width=100,
+            command=self._open_history,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         history_btn.pack(side="right")
 
         # Query input frame
-        input_frame = ctk.CTkFrame(self)
+        input_frame = ctk.CTkFrame(self, fg_color=self.colors["secondary"])
         input_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
 
-        query_label = ctk.CTkLabel(input_frame, text="输入你的问题：")
+        query_label = ctk.CTkLabel(
+            input_frame,
+            text="输入你的问题：",
+            text_color=self.colors["text_dark"]
+        )
         query_label.pack(anchor="w", padx=10, pady=(10, 5))
 
-        self.query_textbox = ctk.CTkTextbox(input_frame, height=80)
+        self.query_textbox = ctk.CTkTextbox(
+            input_frame,
+            height=80,
+            fg_color="white",
+            text_color=self.colors["text_dark"]
+        )
         self.query_textbox.pack(fill="x", padx=10, pady=(0, 10))
         self.query_textbox.insert("1.0", "最近有什么美食热点")
 
         # Options frame
-        options_frame = ctk.CTkFrame(self)
+        options_frame = ctk.CTkFrame(self, fg_color=self.colors["secondary"])
         options_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
         # Checkboxes
@@ -91,16 +128,35 @@ class MainWindow(ctk.CTk):
         checkbox_frame.pack(fill="x", padx=10, pady=10)
 
         self.rewrite_var = ctk.BooleanVar(value=True)
-        rewrite_cb = ctk.CTkCheckBox(checkbox_frame, text="生成仿写", variable=self.rewrite_var)
+        rewrite_cb = ctk.CTkCheckBox(
+            checkbox_frame,
+            text="生成仿写",
+            variable=self.rewrite_var,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
+        )
         rewrite_cb.pack(side="left", padx=10)
 
         self.cover_var = ctk.BooleanVar(value=True)
-        cover_cb = ctk.CTkCheckBox(checkbox_frame, text="生成封面", variable=self.cover_var)
+        cover_cb = ctk.CTkCheckBox(
+            checkbox_frame,
+            text="生成封面",
+            variable=self.cover_var,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
+        )
         cover_cb.pack(side="left", padx=10)
 
         self.cover_image_var = ctk.BooleanVar(value=False)
         cover_image_cb = ctk.CTkCheckBox(
-            checkbox_frame, text="生成封面图片", variable=self.cover_image_var
+            checkbox_frame,
+            text="生成封面图片",
+            variable=self.cover_image_var,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         cover_image_cb.pack(side="left", padx=10)
 
@@ -108,7 +164,11 @@ class MainWindow(ctk.CTk):
         mode_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
         mode_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-        mode_label = ctk.CTkLabel(mode_frame, text="分析模式：")
+        mode_label = ctk.CTkLabel(
+            mode_frame,
+            text="分析模式：",
+            text_color=self.colors["text_dark"]
+        )
         mode_label.pack(side="left", padx=10)
 
         self.mode_var = ctk.StringVar(value="hot")
@@ -117,6 +177,10 @@ class MainWindow(ctk.CTk):
             variable=self.mode_var,
             values=["热点分析", "账号雷达"],
             command=self._on_mode_change,
+            fg_color=self.colors["primary"],
+            button_color=self.colors["primary"],
+            button_hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         mode_menu.pack(side="left")
 
@@ -125,7 +189,13 @@ class MainWindow(ctk.CTk):
         button_frame.pack(fill="x", padx=10, pady=(0, 10))
 
         self.start_btn = ctk.CTkButton(
-            button_frame, text="开始分析", width=120, command=self._start_analysis
+            button_frame,
+            text="开始分析",
+            width=120,
+            command=self._start_analysis,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         self.start_btn.pack(side="left", padx=10)
 
@@ -140,23 +210,36 @@ class MainWindow(ctk.CTk):
         self.cancel_btn.pack(side="left")
 
         batch_btn = ctk.CTkButton(
-            button_frame, text="批量处理", width=100, command=self._open_batch_dialog
+            button_frame,
+            text="批量处理",
+            width=100,
+            command=self._open_batch_dialog,
+            fg_color=self.colors["primary"],
+            hover_color=self.colors["accent"],
+            text_color=self.colors["text_dark"]
         )
         batch_btn.pack(side="left", padx=10)
 
         # Progress frame
-        progress_frame = ctk.CTkFrame(self)
+        progress_frame = ctk.CTkFrame(self, fg_color=self.colors["secondary"])
         progress_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
 
-        self.progress_bar = ctk.CTkProgressBar(progress_frame)
+        self.progress_bar = ctk.CTkProgressBar(
+            progress_frame,
+            progress_color=self.colors["primary"]
+        )
         self.progress_bar.pack(fill="x", padx=10, pady=(10, 5))
         self.progress_bar.set(0)
 
-        self.progress_label = ctk.CTkLabel(progress_frame, text="就绪")
+        self.progress_label = ctk.CTkLabel(
+            progress_frame,
+            text="就绪",
+            text_color=self.colors["text_dark"]
+        )
         self.progress_label.pack(anchor="w", padx=10, pady=(0, 10))
 
         # Result viewer
-        self.result_viewer = ResultViewer(self)
+        self.result_viewer = ResultViewer(self, colors=self.colors)
         self.result_viewer.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="nsew")
 
     def _check_initial_config(self):
