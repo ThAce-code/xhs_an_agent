@@ -1,0 +1,2 @@
+# PyInstaller打包依赖
+pyinstaller>=6.0.0
