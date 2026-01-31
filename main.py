@@ -157,6 +157,18 @@ def main() -> None:
         help="Analysis mode: hot (default) | new | trend | radar (account niche radar).",
     )
     parser.add_argument("--radar", action="store_true", help="Shortcut for --analysis-mode radar")
+    parser.add_argument(
+        "--style-preset",
+        default=settings.style_preset,
+        choices=["balanced", "xhs"],
+        help="Prompt tone preset: balanced (default) or xhs (more Xiaohongshu-like).",
+    )
+    parser.add_argument(
+        "--validate-retries",
+        type=int,
+        default=settings.validate_retries,
+        help="Auto-repair retries when model output fails JSON/citation validation (default 1).",
+    )
     parser.add_argument("--analysis-temp", type=float, default=settings.analysis_temperature, help="Temperature for analysis")
     parser.add_argument("--rewrite-temp", type=float, default=settings.rewrite_temperature, help="Temperature for rewrite")
     parser.add_argument("--cover-temp", type=float, default=settings.cover_temperature, help="Temperature for cover")
@@ -199,6 +211,10 @@ def main() -> None:
         os.environ["XHS_GEMINI_BASE_URL"] = str(args.gemini_base_url).strip()
     if getattr(args, "gemini_api_key", None) is not None and str(args.gemini_api_key).strip():
         os.environ["XHS_GEMINI_API_KEY"] = str(args.gemini_api_key).strip()
+    if getattr(args, "style_preset", None) is not None and str(args.style_preset).strip():
+        os.environ["XHS_STYLE_PRESET"] = str(args.style_preset).strip()
+    if getattr(args, "validate_retries", None) is not None:
+        os.environ["XHS_VALIDATE_RETRIES"] = str(int(args.validate_retries))
 
     if args.radar:
         args.analysis_mode = "radar"
@@ -236,6 +252,7 @@ def main() -> None:
         {
             "input": args.query,
             "analysis_mode": args.analysis_mode,
+            "style_preset": args.style_preset,
             "days": args.days,
             "lang": args.lang,
             "region": args.region,

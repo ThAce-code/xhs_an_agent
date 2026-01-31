@@ -28,6 +28,12 @@ class Settings:
     rewrite_temperature: float = 0.7
     cover_temperature: float = 0.6
 
+    # Prompt style
+    style_preset: str = "balanced"  # balanced | xhs
+
+    # Validation (auto-repair retries on invalid JSON/citations)
+    validate_retries: int = 1
+
     # Optional: cover image generation (Stage 3.2)
     cover_image_provider: str = "minimax"  # minimax | google
     cover_image_model: str = "image-01"
@@ -87,6 +93,8 @@ def load_settings() -> Settings:
             analysis_temperature: float = Settings.analysis_temperature
             rewrite_temperature: float = Settings.rewrite_temperature
             cover_temperature: float = Settings.cover_temperature
+            style_preset: str = Settings.style_preset
+            validate_retries: int = Settings.validate_retries
             cover_image_provider: str = Settings.cover_image_provider
             cover_image_model: str = Settings.cover_image_model
             cover_image_aspect: str = Settings.cover_image_aspect
@@ -111,6 +119,8 @@ def load_settings() -> Settings:
             analysis_temperature=s.analysis_temperature,
             rewrite_temperature=s.rewrite_temperature,
             cover_temperature=s.cover_temperature,
+            style_preset=s.style_preset,
+            validate_retries=s.validate_retries,
             cover_image_provider=s.cover_image_provider,
             cover_image_model=s.cover_image_model,
             cover_image_aspect=s.cover_image_aspect,
@@ -133,6 +143,8 @@ def load_settings() -> Settings:
             analysis_temperature=float(os.getenv("XHS_ANALYSIS_TEMPERATURE", str(Settings.analysis_temperature))),
             rewrite_temperature=float(os.getenv("XHS_REWRITE_TEMPERATURE", str(Settings.rewrite_temperature))),
             cover_temperature=float(os.getenv("XHS_COVER_TEMPERATURE", str(Settings.cover_temperature))),
+            style_preset=os.getenv("XHS_STYLE_PRESET", Settings.style_preset),
+            validate_retries=int(os.getenv("XHS_VALIDATE_RETRIES", str(Settings.validate_retries))),
             cover_image_provider=os.getenv("XHS_COVER_IMAGE_PROVIDER", Settings.cover_image_provider),
             cover_image_model=os.getenv("XHS_COVER_IMAGE_MODEL", Settings.cover_image_model),
             cover_image_aspect=os.getenv("XHS_COVER_IMAGE_ASPECT", Settings.cover_image_aspect),

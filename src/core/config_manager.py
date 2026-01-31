@@ -217,6 +217,8 @@ class ConfigManager:
                 "analysis_temperature": 0.0,
                 "rewrite_temperature": 0.7,
                 "cover_temperature": 0.6,
+                "style_preset": os.getenv("XHS_STYLE_PRESET", "balanced"),
+                "validate_retries": int(os.getenv("XHS_VALIDATE_RETRIES", "1")),
                 "max_results": int(os.getenv("XHS_MAX_RESULTS", "5")),
                 "max_queries": int(os.getenv("XHS_MAX_QUERIES", "6")),
                 "max_sources": int(os.getenv("XHS_MAX_SOURCES", "10")),

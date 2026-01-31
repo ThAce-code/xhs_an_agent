@@ -241,6 +241,28 @@ class SettingsDialog(ctk.CTkToplevel):
         self.cover_temp_entry = ctk.CTkEntry(cover_temp_frame, width=100)
         self.cover_temp_entry.pack(side="left", padx=10)
 
+        # Prompt style preset
+        style_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        style_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(style_frame, text="Style Preset:", width=120).pack(side="left", padx=10)
+        self.style_preset_var = ctk.StringVar(value="balanced")
+        style_menu = ctk.CTkOptionMenu(
+            style_frame,
+            variable=self.style_preset_var,
+            values=["balanced", "xhs"],
+            width=200,
+        )
+        style_menu.pack(side="left")
+
+        # Validation retries
+        validate_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        validate_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(validate_frame, text="Validate Retries:", width=120).pack(side="left", padx=10)
+        self.validate_retries_entry = ctk.CTkEntry(validate_frame, width=100)
+        self.validate_retries_entry.pack(side="left")
+
     def _create_search_params_tab(self):
         """Create search parameters tab."""
         tab = self.tabview.tab("搜索参数")
@@ -340,6 +362,10 @@ class SettingsDialog(ctk.CTkToplevel):
         self.analysis_temp_entry.insert(0, str(self.config_manager.get_setting("analysis_temperature", 0.0)))
         self.rewrite_temp_entry.insert(0, str(self.config_manager.get_setting("rewrite_temperature", 0.7)))
         self.cover_temp_entry.insert(0, str(self.config_manager.get_setting("cover_temperature", 0.6)))
+        if hasattr(self, "style_preset_var"):
+            self.style_preset_var.set(self.config_manager.get_setting("style_preset", "balanced"))
+        if hasattr(self, "validate_retries_entry"):
+            self.validate_retries_entry.insert(0, str(self.config_manager.get_setting("validate_retries", 1)))
 
         # Search Parameters
         self.max_results_entry.insert(0, str(self.config_manager.get_setting("max_results", 5)))
@@ -374,6 +400,10 @@ class SettingsDialog(ctk.CTkToplevel):
             self.config_manager.set_setting("analysis_temperature", float(self.analysis_temp_entry.get()))
             self.config_manager.set_setting("rewrite_temperature", float(self.rewrite_temp_entry.get()))
             self.config_manager.set_setting("cover_temperature", float(self.cover_temp_entry.get()))
+            if hasattr(self, "style_preset_var"):
+                self.config_manager.set_setting("style_preset", self.style_preset_var.get().strip())
+            if hasattr(self, "validate_retries_entry"):
+                self.config_manager.set_setting("validate_retries", int(self.validate_retries_entry.get()))
 
             # Save search parameters
             self.config_manager.set_setting("max_results", int(self.max_results_entry.get()))
