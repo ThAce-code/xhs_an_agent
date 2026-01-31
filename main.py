@@ -153,8 +153,8 @@ def main() -> None:
     parser.add_argument(
         "--analysis-mode",
         default="hot",
-        choices=["hot", "radar"],
-        help="Analysis mode: hot (default) or radar (account niche radar).",
+        choices=["hot", "new", "trend", "radar"],
+        help="Analysis mode: hot (default) | new | trend | radar (account niche radar).",
     )
     parser.add_argument("--radar", action="store_true", help="Shortcut for --analysis-mode radar")
     parser.add_argument("--analysis-temp", type=float, default=settings.analysis_temperature, help="Temperature for analysis")
@@ -478,3 +478,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
