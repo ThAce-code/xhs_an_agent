@@ -246,6 +246,7 @@ def multi_search_and_rank(
     max_queries: int = 6,
     max_sources: int = 10,
     trusted_domains: set[str] | None = None,
+    should_cancel: Any | None = None,
 ) -> RankedSearch:
     """Run multiple searches, then de-dupe and rank results."""
 
@@ -256,9 +257,13 @@ def multi_search_and_rank(
 
     all_items: list[dict[str, Any]] = []
     for q in queries:
+        if callable(should_cancel) and should_cancel():
+            raise RuntimeError("Task cancelled")
         logger.info("multi_search q=%s", q)
         payload = tavily_tool.invoke({"query": q, "days": days, "lang": lang, "region": region})
         all_items.extend(normalize_tavily_payload(payload, source_query=shape_query(q, days=days, lang=lang, region=region)))
+        if callable(should_cancel) and should_cancel():
+            raise RuntimeError("Task cancelled")
 
     # Dedupe by canonical URL.
     best_by_url: dict[str, dict[str, Any]] = {}
@@ -305,4 +310,3 @@ def multi_search_and_rank(
         )
 
     return RankedSearch(queries=queries, sources=sources)
-

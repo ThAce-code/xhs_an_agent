@@ -30,14 +30,20 @@ class MVPExecutor:
     fallback_llm_rewrite: Any | None
     fallback_llm_cover: Any | None
     tools_by_name: dict[str, BaseTool]
+    should_cancel: Any | None = None
     verbose: bool = True
     max_iterations: int = 6
+
+    def _check_cancelled(self) -> None:
+        if callable(self.should_cancel) and self.should_cancel():
+            raise RuntimeError("Task cancelled")
 
     def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
         user_input = inputs.get("input") or inputs.get("query")
         if not user_input:
             raise ValueError("Missing 'input' in invoke({...})")
 
+        self._check_cancelled()
         analysis_mode = inputs.get("analysis_mode")
         days = inputs.get("days")
         lang = inputs.get("lang")
@@ -54,6 +60,7 @@ class MVPExecutor:
             except Exception as e:
                 logger.warning("tool-calling loop failed; fallback to search-first: %s", e)
 
+        self._check_cancelled()
         text, ranked = self._run_search_first(
             str(user_input),
             str(search_query),
@@ -76,6 +83,7 @@ class MVPExecutor:
             llm = self.cover_llm
             fallback = self.fallback_llm_cover
 
+        self._check_cancelled()
         try:
             resp = llm.invoke(messages)
             usage = getattr(resp, "usage_metadata", None)
@@ -140,6 +148,7 @@ class MVPExecutor:
         if tavily is None:
             raise RuntimeError("tavily_search tool is not configured")
 
+        self._check_cancelled()
         if self.verbose:
             logger.info("search_first user_query=%s days=%s lang=%s region=%s", search_query, days, lang, region)
 
@@ -161,6 +170,7 @@ class MVPExecutor:
             max_queries=max_queries,
             max_sources=max_sources,
             trusted_domains=trusted_domains,
+            should_cancel=self.should_cancel,
         )
 
         context = {
@@ -244,6 +254,7 @@ def build_agent_executor(
     verbose: bool = True,
     minimax_model: str = "MiniMax-M2.1",
     minimax_base_url: str = "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+    should_cancel: Any | None = None,
 ) -> MVPExecutor:
     """Create a runnable executor.
 
@@ -295,10 +306,12 @@ def build_agent_executor(
             timeout_s=gemini_timeout_s,
             max_retries=gemini_retries,
         )
+        logger.info("gemini route=proxy base_url=%s auth_mode=%s model=%s", gemini_base, auth_mode, model)
     else:
         analysis_llm = ChatGoogleGenerativeAI(model=model, temperature=analysis_temperature)
         rewrite_llm = ChatGoogleGenerativeAI(model=model, temperature=rewrite_temperature)
         cover_llm = ChatGoogleGenerativeAI(model=model, temperature=cover_temperature)
+        logger.info("gemini route=official model=%s", model)
 
     llm_with_tools = None
     if hasattr(analysis_llm, "bind_tools"):
@@ -357,5 +370,6 @@ def build_agent_executor(
         fallback_llm_rewrite=fallback_llm_rewrite,
         fallback_llm_cover=fallback_llm_cover,
         tools_by_name=tools_by_name,
+        should_cancel=should_cancel,
         verbose=verbose,
     )

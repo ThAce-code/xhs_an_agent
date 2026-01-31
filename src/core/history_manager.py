@@ -41,7 +41,9 @@ class HistoryManager:
                 query TEXT NOT NULL,
                 mode TEXT NOT NULL,
                 result TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'completed',
                 metadata TEXT,
+                updated_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """
@@ -58,8 +60,21 @@ class HistoryManager:
         )
         self.conn.commit()
 
+        # Lightweight migration for older databases (add columns if missing).
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(history)").fetchall()}
+        if "status" not in cols:
+            self.conn.execute("ALTER TABLE history ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'")
+        if "updated_at" not in cols:
+            self.conn.execute("ALTER TABLE history ADD COLUMN updated_at TIMESTAMP")
+        self.conn.commit()
+
     def save_record(
-        self, query: str, result: dict[str, Any], metadata: dict[str, Any] | None = None
+        self,
+        query: str,
+        result: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+        *,
+        status: str = "completed",
     ) -> int:
         """Save analysis record.
 
@@ -77,14 +92,56 @@ class HistoryManager:
 
         cursor = self.conn.execute(
             """
-            INSERT INTO history (query, mode, result, metadata)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO history (query, mode, result, status, metadata, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
         """,
-            (query, mode, result_json, metadata_json),
+            (query, mode, result_json, status, metadata_json, datetime.now().isoformat(timespec="seconds")),
         )
         self.conn.commit()
 
         return cursor.lastrowid
+
+    def update_record(
+        self,
+        record_id: int,
+        *,
+        result: dict[str, Any] | None = None,
+        status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Update an existing record (result/status/metadata)."""
+
+        fields: list[str] = []
+        params: list[Any] = []
+
+        if result is not None:
+            fields.append("result = ?")
+            params.append(json.dumps(result, ensure_ascii=False))
+            # Keep mode in sync if present.
+            mode = result.get("mode") if isinstance(result, dict) else None
+            if isinstance(mode, str) and mode:
+                fields.append("mode = ?")
+                params.append(mode)
+
+        if status is not None:
+            fields.append("status = ?")
+            params.append(status)
+
+        if metadata is not None:
+            fields.append("metadata = ?")
+            params.append(json.dumps(metadata, ensure_ascii=False))
+
+        fields.append("updated_at = ?")
+        params.append(datetime.now().isoformat(timespec="seconds"))
+
+        if not fields:
+            return False
+
+        params.append(record_id)
+        sql = f"UPDATE history SET {', '.join(fields)} WHERE id = ?"
+        cur = self.conn.execute(sql, tuple(params))
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def get_records(
         self, limit: int = 50, offset: int = 0, mode: str | None = None
@@ -102,7 +159,7 @@ class HistoryManager:
         if mode:
             cursor = self.conn.execute(
                 """
-                SELECT id, query, mode, created_at
+                SELECT id, query, mode, status, created_at
                 FROM history
                 WHERE mode = ?
                 ORDER BY created_at DESC
@@ -113,7 +170,7 @@ class HistoryManager:
         else:
             cursor = self.conn.execute(
                 """
-                SELECT id, query, mode, created_at
+                SELECT id, query, mode, status, created_at
                 FROM history
                 ORDER BY created_at DESC
                 LIMIT ? OFFSET ?
@@ -128,6 +185,7 @@ class HistoryManager:
                     "id": row["id"],
                     "query": row["query"],
                     "mode": row["mode"],
+                    "status": row["status"] if "status" in row.keys() else "completed",
                     "created_at": row["created_at"],
                 }
             )
@@ -145,7 +203,7 @@ class HistoryManager:
         """
         cursor = self.conn.execute(
             """
-            SELECT id, query, mode, result, metadata, created_at
+            SELECT id, query, mode, status, result, metadata, updated_at, created_at
             FROM history
             WHERE id = ?
         """,
@@ -160,8 +218,10 @@ class HistoryManager:
             "id": row["id"],
             "query": row["query"],
             "mode": row["mode"],
+            "status": row["status"] if "status" in row.keys() else "completed",
             "result": json.loads(row["result"]),
             "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
+            "updated_at": row["updated_at"] if "updated_at" in row.keys() else None,
             "created_at": row["created_at"],
         }
 
@@ -177,7 +237,7 @@ class HistoryManager:
         """
         cursor = self.conn.execute(
             """
-            SELECT id, query, mode, created_at
+            SELECT id, query, mode, status, created_at
             FROM history
             WHERE query LIKE ?
             ORDER BY created_at DESC
@@ -193,6 +253,7 @@ class HistoryManager:
                     "id": row["id"],
                     "query": row["query"],
                     "mode": row["mode"],
+                    "status": row["status"] if "status" in row.keys() else "completed",
                     "created_at": row["created_at"],
                 }
             )

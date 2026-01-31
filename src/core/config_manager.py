@@ -65,6 +65,9 @@ class ConfigManager:
         else:
             self._config = self._get_default_config()
 
+        # Ensure new keys are present after upgrades.
+        self._migrate_defaults()
+
         return self._config
 
     def save_config(self, config: dict[str, Any] | None = None) -> None:
@@ -94,12 +97,13 @@ class ConfigManager:
         """
         encrypted = self._config.get("api_keys", {}).get(key_name, "")
         if not encrypted:
-            return ""
+            # Fallback to environment variables for first-run convenience.
+            return self._get_api_key_from_env(key_name)
 
         try:
             return self.decrypt_value(encrypted)
         except Exception:
-            return ""
+            return self._get_api_key_from_env(key_name)
 
     def set_api_key(self, key_name: str, value: str) -> None:
         """Set API key with encryption.
@@ -126,7 +130,18 @@ class ConfigManager:
         Returns:
             Setting value or default
         """
-        return self._config.get("settings", ).get(key, default)
+        settings = self._config.get("settings", {})
+        env_key = f"XHS_{key.upper()}"
+        env_val = os.getenv(env_key)
+
+        if isinstance(settings, dict) and key in settings:
+            val = settings.get(key, default)
+            # If config has an "unset" string but env provides a value, prefer env.
+            if isinstance(val, str) and not val.strip() and isinstance(env_val, str) and env_val.strip():
+                return env_val
+            return val
+
+        return env_val if env_val is not None else default
 
     def set_setting(self, key: str, value: Any) -> None:
         """Set application setting.
@@ -149,9 +164,10 @@ class ConfigManager:
         # Check required API keys
         google_key = self.get_api_key("google")
         tavily_key = self.get_api_key("tavily")
+        gemini_proxy_key = str(self.get_setting("gemini_api_key", "") or "").strip()
 
-        if not google_key:
-            return False, "Google API Key is required"
+        if not google_key and not gemini_proxy_key:
+            return False, "Google API Key or Gemini Proxy API Key is required"
 
         if not tavily_key:
             return False, "Tavily API Key is required"
@@ -189,24 +205,60 @@ class ConfigManager:
         return {
             "api_keys": {},
             "settings": {
-                "gemini_model": "gemini-2.5-flash",
+                # Prefer env values (loaded from .env or system env) on first run.
+                "gemini_model": os.getenv("XHS_GEMINI_MODEL", "gemini-2.5-flash"),
+                "gemini_base_url": os.getenv("XHS_GEMINI_BASE_URL", ""),
+                "gemini_api_key": os.getenv("XHS_GEMINI_API_KEY", ""),
+                "gemini_auth_mode": os.getenv("XHS_GEMINI_AUTH_MODE", "auto"),
                 "minimax_model": "MiniMax-M2.1",
-                "minimax_base_url": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+                "minimax_base_url": os.getenv(
+                    "XHS_MINIMAX_BASE_URL", "https://api.minimaxi.com/v1/text/chatcompletion_v2"
+                ),
                 "analysis_temperature": 0.0,
                 "rewrite_temperature": 0.7,
                 "cover_temperature": 0.6,
-                "max_results": 5,
-                "max_queries": 6,
-                "max_sources": 10,
-                "days": 30,
-                "lang": "zh",
-                "region": "cn",
-                "out_dir": "outputs",
-                "cover_image_provider": "minimax",
-                "cover_image_model": "image-01",
-                "cover_image_aspect": "3:4",
+                "max_results": int(os.getenv("XHS_MAX_RESULTS", "5")),
+                "max_queries": int(os.getenv("XHS_MAX_QUERIES", "6")),
+                "max_sources": int(os.getenv("XHS_MAX_SOURCES", "10")),
+                "days": int(os.getenv("XHS_DAYS", "30")),
+                "lang": os.getenv("XHS_LANG", "zh"),
+                "region": os.getenv("XHS_REGION", "cn"),
+                "out_dir": os.getenv("XHS_OUT_DIR", "outputs"),
+                "cover_image_provider": os.getenv("XHS_COVER_IMAGE_PROVIDER", "minimax"),
+                "cover_image_model": os.getenv("XHS_COVER_IMAGE_MODEL", "image-01"),
+                "cover_image_aspect": os.getenv("XHS_COVER_IMAGE_ASPECT", "3:4"),
+                "minimax_image_base_url": os.getenv(
+                    "XHS_MINIMAX_IMAGE_BASE_URL", "https://api.minimaxi.com/v1/image_generation"
+                ),
             },
         }
+
+    def _get_api_key_from_env(self, key_name: str) -> str:
+        """Map GUI key slots to conventional env vars."""
+        name = (key_name or "").strip().lower()
+        if name == "google":
+            return (os.getenv("GOOGLE_API_KEY") or "").strip()
+        if name == "tavily":
+            return (os.getenv("TAVILY_API_KEY") or "").strip()
+        if name == "minimax":
+            return (os.getenv("MINIMAX_API_KEY") or os.getenv("XHS_MINIMAX_API_KEY") or "").strip()
+        return ""
+
+    def _migrate_defaults(self) -> None:
+        """Backfill missing keys in existing config files."""
+        defaults = self._get_default_config()
+        if not isinstance(self._config, dict):
+            self._config = defaults
+            return
+
+        self._config.setdefault("api_keys", {})
+        self._config.setdefault("settings", {})
+
+        settings = self._config.get("settings")
+        default_settings = defaults.get("settings", {})
+        if isinstance(settings, dict) and isinstance(default_settings, dict):
+            for k, v in default_settings.items():
+                settings.setdefault(k, v)
 
     def reset_to_defaults(self) -> None:
         """Reset configuration to defaults (keeps API keys)."""
@@ -235,9 +287,19 @@ class ConfigManager:
         if minimax_key:
             env_vars["MINIMAX_API_KEY"] = minimax_key
 
+        # Optional: Gemini proxy key (if set in settings)
+        gemini_proxy_key = str(self.get_setting("gemini_api_key", "") or "").strip()
+        if gemini_proxy_key:
+            env_vars["XHS_GEMINI_API_KEY"] = gemini_proxy_key
+
         # Settings with XHS_ prefix
         settings = self._config.get("settings", {})
         for key, value in settings.items():
+            # Don't clobber an existing env (e.g. loaded from .env) with empty config values.
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
             env_key = f"XHS_{key.upper()}"
             env_vars[env_key] = str(value)
 

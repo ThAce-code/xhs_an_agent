@@ -14,14 +14,16 @@ args = [
     "--windowed",  # No console window
     "--name=XHS_Agent",  # Executable name
     # "--icon=icon.ico",  # Application icon (uncomment when icon is ready)
+    f"--paths={project_root}",  # Ensure local imports resolve (src/, main.py, etc.)
     f"--add-data={project_root / 'src'}{';' if sys.platform == 'win32' else ':'}src",  # Include src directory
+    "--collect-submodules=src",  # Collect all local submodules (robust for dynamic imports)
     "--hidden-import=langchain",
     "--hidden-import=langchain_google_genai",
     "--hidden-import=langchain_community",
     "--hidden-import=tavily",
     "--hidden-import=customtkinter",
-    "--hidden-import=PIL",
-    "--hidden-import=cryptography",
+    "--collect-all=PIL",
+    "--collect-all=cryptography",
     "--collect-all=langchain",
     "--collect-all=langchain_community",
     "--collect-all=langchain_google_genai",

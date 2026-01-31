@@ -2,6 +2,9 @@
 
 ## Project Structure
 - `main.py`: Entry point (CLI); loads `.env` and runs the agent.
+- `gui_app.py`: Desktop GUI entry point (CustomTkinter).
+- `build_exe.py`: PyInstaller build script for Windows `.exe`.
+- `BUILD.md`: Desktop app build notes (PyInstaller).
 - `src/`: Package code
   - `src/agent.py`: Executor (analysis + optional rewrite/cover; Gemini primary, MiniMax fallback).
   - `src/retrieval.py`: Multi-query search, de-dupe, ranking.
@@ -12,6 +15,7 @@
   - `src/config.py`: Settings (pydantic-settings if installed; env fallback).
   - `src/logging_utils.py`: File logging to `outputs/<run_id>/run.log`.
   - `src/llms.py`: MiniMax chat client for fallback.
+  - `src/gui/`: Desktop GUI (window, settings, history, viewer).
 
 ## Setup & Run (Conda)
 Prereq: activate your conda env named `langchain`.
@@ -24,6 +28,21 @@ copy .env.example .env
 # Edit .env to set GOOGLE_API_KEY and TAVILY_API_KEY
 python main.py "分析近30天小红书穿搭赛道的流量趋势与爆款选题"
 ```
+
+## Desktop GUI & Packaging (PyInstaller)
+```powershell
+# Run GUI locally
+python -m pip install -r requirements-gui.txt
+python gui_app.py
+
+# Build Windows exe (outputs to dist/XHS_Agent.exe)
+python -m pip install -r requirements-build.txt
+python build_exe.py
+```
+Notes:
+- Built exe is large (single-file bundling); first launch may be slower.
+- Desktop app stores local settings under `~/.xhs_agent/` (do not commit secrets).
+- GUI also tries to load a `.env` file (for convenience) from: exe folder → CWD → repo root. This is useful for portable `.exe` runs; you can still override/persist values via the Settings dialog.
 
 ## Configuration Tips
 - Secrets (do not commit): `GOOGLE_API_KEY`, `TAVILY_API_KEY`, and optional `MINIMAX_API_KEY`.
@@ -70,6 +89,11 @@ Reports are written to `outputs/<run_id>/` by default.
 2. The app loads `.env`, sets up logging, and builds an executor.
 3. The executor runs multi-query search via Tavily, then asks the LLM to return a structured JSON analysis (with citations).
 4. With `--rewrite/--cover`, it generates additional JSON outputs and exports `analysis.*`, `rewrite.*`, `cover.*` separately.
+
+## Desktop App Config Flow (GUI)
+- First-run: the GUI seeds defaults from environment variables (including `.env` if present).
+- Runtime: the GUI exports settings as env vars (`XHS_*`) and passes them into the executor.
+- Debugging proxy: in Settings → API keys, use `Gemini Base URL` + `Gemini Proxy API Key (sk-...)`, and optionally set `Gemini Auth Mode` (`auto/query/header/bearer`), then click `Show effective Gemini config` / `Test Gemini connection`.
 
 ## Coding Style & Naming
 - Python 3.10+, 4-space indentation, type hints for public APIs.

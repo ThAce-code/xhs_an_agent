@@ -33,6 +33,9 @@ dist/
 .ipynb_checkpoints/
 .cache/
 
+# PyInstaller
+*.spec
+
 # OS/editor
 .DS_Store
 Thumbs.db

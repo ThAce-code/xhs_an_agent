@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Xiaohongshu Traffic Analysis Tool</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        // Sunset Mood Palette
+                        primary: "#d98e82", // Terracotta/Dark Peach for buttons
+                        primaryHover: "#c57b70",
+                        // Backgrounds
+                        "background-light": "#dbe4ef", // Light Blue/Grey from screenshot
+                        "background-dark": "#1e293b", // Dark Slate
+                        // Panels (The peach containers)
+                        "panel-light": "#f4dcd6", 
+                        "panel-dark": "#332a28", // Dark warm grey for dark mode panels
+                        // Input backgrounds
+                        "input-light": "#ffffff",
+                        "input-dark": "#1a1615",
+                        // Text
+                        "text-main-light": "#1f2937",
+                        "text-main-dark": "#f3f4f6",
+                    },
+                    fontFamily: {
+                        display: ["'Noto Sans SC'", "sans-serif"],
+                        body: ["'Noto Sans SC'", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.5rem",
+                        'xl': '1rem',
+                        '2xl': '1.5rem',
+                    },
+                },
+            },
+        };
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+        }textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 20px;
+        }
+        .dark textarea::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-main-light dark:text-text-main-dark min-h-screen p-4 md:p-8 transition-colors duration-300">
+<header class="flex justify-between items-center mb-6">
+<h1 class="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
+<span class="material-icons-round">analytics</span>
+            小红书流量分析助手
+        </h1>
+<div class="flex gap-3">
+<button class="flex items-center gap-1 bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-full shadow-sm transition-colors font-medium text-sm">
+<span class="material-icons-round text-lg">history</span>
+                历史记录
+            </button>
+<button class="flex items-center gap-1 bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-full shadow-sm transition-colors font-medium text-sm">
+<span class="material-icons-round text-lg">settings</span>
+                设置
+            </button>
+</div>
+</header>
+<main class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
+<aside class="lg:col-span-4 flex flex-col gap-6 h-full">
+<div class="bg-panel-light dark:bg-panel-dark rounded-2xl p-5 shadow-sm flex flex-col flex-grow transition-colors duration-300">
+<label class="block text-lg font-bold mb-3 text-gray-800 dark:text-gray-100" for="question">
+                    输入你的问题
+                </label>
+<textarea class="w-full flex-grow p-4 rounded-xl border-none resize-none focus:ring-2 focus:ring-primary bg-input-light dark:bg-input-dark text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 shadow-inner text-base leading-relaxed" id="question" placeholder="最近有什么美食搭配热点..."></textarea>
+</div>
+<div class="bg-panel-light dark:bg-panel-dark rounded-2xl p-5 shadow-sm transition-colors duration-300">
+<h2 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100">分析模式</h2>
+<div class="flex flex-wrap gap-4 mb-4">
+<label class="inline-flex items-center cursor-pointer">
+<input checked="" class="form-checkbox h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary bg-input-light dark:bg-input-dark border-none shadow-sm" type="checkbox"/>
+<span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">生成仿真</span>
+</label>
+<label class="inline-flex items-center cursor-pointer">
+<input checked="" class="form-checkbox h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary bg-input-light dark:bg-input-dark border-none shadow-sm" type="checkbox"/>
+<span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">生成封面</span>
+</label>
+<label class="inline-flex items-center cursor-pointer">
+<input checked="" class="form-checkbox h-5 w-5 text-primary rounded border-gray-300 focus:ring-primary bg-input-light dark:bg-input-dark border-none shadow-sm" type="checkbox"/>
+<span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">生成封面图片</span>
+</label>
+</div>
+<div class="flex items-center gap-3 mb-5">
+<span class="text-sm font-medium text-gray-700 dark:text-gray-300">分析模式:</span>
+<div class="relative inline-block w-32">
+<select class="block w-full rounded-lg border-none bg-input-light dark:bg-input-dark py-1.5 pl-3 pr-8 text-sm focus:border-primary focus:ring-primary shadow-sm dark:text-white">
+<option>hot</option>
+<option>new</option>
+<option>trend</option>
+</select>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="bg-primary hover:bg-primaryHover text-white px-6 py-2 rounded-full font-medium shadow-sm transition-all flex-1">
+                        开始分析
+                    </button>
+<button class="bg-[#c28e85] hover:bg-[#a6746b] dark:bg-[#5a4845] dark:hover:bg-[#4a3b39] text-white px-6 py-2 rounded-full font-medium shadow-sm transition-all flex-1">
+                        取消
+                    </button>
+<button class="bg-primary hover:bg-primaryHover text-white px-6 py-2 rounded-full font-medium shadow-sm transition-all flex-1">
+                        批量处理
+                    </button>
+</div>
+</div>
+<div class="flex items-center gap-3 px-1">
+<span class="text-sm font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">状态</span>
+<div class="w-full bg-white dark:bg-gray-700 rounded-full h-3 shadow-inner overflow-hidden">
+<div class="bg-gray-800 dark:bg-primary h-3 rounded-full" style="width: 75%"></div>
+</div>
+</div>
+</aside>
+<section class="lg:col-span-8 bg-panel-light dark:bg-panel-dark rounded-2xl p-1 shadow-sm flex flex-col h-full transition-colors duration-300">
+<div class="px-5 py-4">
+<div class="flex space-x-1 bg-[#eec9b9] dark:bg-[#2a2220] p-1 rounded-xl w-max shadow-inner">
+<button class="px-6 py-1.5 rounded-lg text-sm font-bold shadow bg-white dark:bg-gray-700 text-primary dark:text-white ring-1 ring-black/5">
+                        分析
+                    </button>
+<button class="px-6 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-600/50 transition-all">
+                        仿写
+                    </button>
+<button class="px-6 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-600/50 transition-all">
+                        封面
+                    </button>
+<button class="px-6 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-600/50 transition-all">
+                        来源
+                    </button>
+</div>
+</div>
+<div class="flex-grow px-5 pb-2">
+<div class="w-full h-full bg-input-light dark:bg-input-dark rounded-xl shadow-inner border-2 border-transparent p-6 text-gray-800 dark:text-gray-200 overflow-y-auto">
+<div class="space-y-4">
+<div class="h-4 bg-gray-100 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
+<div class="h-4 bg-gray-100 dark:bg-gray-700 rounded w-full animate-pulse"></div>
+<div class="h-4 bg-gray-100 dark:bg-gray-700 rounded w-5/6 animate-pulse"></div>
+<div class="h-32 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+                            等待分析结果...
+                        </div>
+</div>
+</div>
+</div>
+<div class="px-5 py-4 flex justify-end gap-3">
+<button class="flex items-center gap-2 bg-primary hover:bg-primaryHover text-white px-5 py-2 rounded-full font-medium shadow-sm transition-all text-sm">
+<span class="material-icons-round text-base">data_object</span>
+                    导出JSON
+                </button>
+<button class="flex items-center gap-2 bg-primary hover:bg-primaryHover text-white px-5 py-2 rounded-full font-medium shadow-sm transition-all text-sm">
+<span class="material-icons-round text-base">content_copy</span>
+                    复制当前
+                </button>
+</div>
+</section>
+</main>
+<div class="fixed bottom-4 right-4 z-50">
+<button class="bg-gray-800 dark:bg-white text-white dark:text-gray-800 p-3 rounded-full shadow-lg hover:scale-110 transition-transform" onclick="document.documentElement.classList.toggle('dark')">
+<span class="material-icons-round dark:hidden">dark_mode</span>
+<span class="material-icons-round hidden dark:block">light_mode</span>
+</button>
+</div>
+
+</body></html>

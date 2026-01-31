@@ -41,6 +41,21 @@ class HistoryPanel(ctk.CTkToplevel):
 
         self._create_widgets()
         self._load_records()
+        self.after(1200, self._auto_refresh)
+
+    def _auto_refresh(self):
+        """Periodically refresh records so running tasks appear without reopening."""
+        try:
+            if not self.winfo_exists():
+                return
+            keyword = self.search_entry.get().strip() if hasattr(self, "search_entry") else ""
+            if keyword:
+                self._search_records()
+            else:
+                self._load_records()
+        finally:
+            if self.winfo_exists():
+                self.after(1200, self._auto_refresh)
 
     def _create_widgets(self):
         """Create all UI widgets."""
@@ -125,7 +140,8 @@ class HistoryPanel(ctk.CTkToplevel):
         info_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
         # Date and mode
-        date_mode_text = f"{record['created_at']} | {record['mode']}"
+        status = record.get("status") or "completed"
+        date_mode_text = f"{record['created_at']} | {record['mode']} | {status}"
         date_label = ctk.CTkLabel(
             info_frame, text=date_mode_text, font=ctk.CTkFont(size=11), text_color="gray"
         )

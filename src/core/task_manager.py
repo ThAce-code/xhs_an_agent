@@ -14,13 +14,28 @@ from typing import Any, Callable
 from ..agent import build_agent_executor
 from ..reporting import (
     extract_text,
+    now_stamp,
     parse_cover,
     parse_radar,
     parse_report,
     parse_rewrite,
+    slugify,
+    write_cover_csv_bundle,
+    write_cover_markdown,
+    write_csv_bundle,
+    write_json,
+    write_markdown,
+    write_radar_csv_bundle,
+    write_radar_markdown,
+    write_rewrite_csv_bundle,
+    write_rewrite_markdown,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TaskCancelled(RuntimeError):
+    """Raised when a running task is cancelled by the user."""
 
 
 class TaskManager:
@@ -70,6 +85,7 @@ class TaskManager:
             executor = build_agent_executor(
                 model=options.get("gemini_model", "gemini-2.5-flash"),
                 gemini_base_url=options.get("gemini_base_url"),
+                gemini_api_key=options.get("gemini_api_key"),
                 analysis_temperature=options.get("analysis_temperature", 0.0),
                 rewrite_temperature=options.get("rewrite_temperature", 0.7),
                 cover_temperature=options.get("cover_temperature", 0.6),
@@ -79,10 +95,11 @@ class TaskManager:
                 minimax_base_url=options.get(
                     "minimax_base_url", "https://api.minimaxi.com/v1/text/chatcompletion_v2"
                 ),
+                should_cancel=lambda: bool(self._cancel_flag),
             )
 
             if self._cancel_flag:
-                raise RuntimeError("Task cancelled")
+                raise TaskCancelled("Task cancelled")
 
             self._update_progress("search", 1, 4, "搜索相关信息...")
 
@@ -101,7 +118,7 @@ class TaskManager:
             )
 
             if self._cancel_flag:
-                raise RuntimeError("Task cancelled")
+                raise TaskCancelled("Task cancelled")
 
             context = result.get("context") if isinstance(result, dict) else None
             raw_output = extract_text(result.get("output") if isinstance(result, dict) else result)
@@ -110,7 +127,10 @@ class TaskManager:
             if isinstance(context, dict) and isinstance(context.get("sources"), list):
                 sources = [s for s in context["sources"] if isinstance(s, dict)]
 
-            self._update_progress("analyze", 2, 4, "分析热点趋势...")
+            if analysis_mode == "radar":
+                self._update_progress("analyze", 2, 4, "生成账号方向雷达...")
+            else:
+                self._update_progress("analyze", 2, 4, "分析热点趋势...")
 
             # Parse results based on mode
             if analysis_mode == "radar":
@@ -158,7 +178,7 @@ class TaskManager:
                 # Run rewrite if requested
                 if options.get("rewrite", False) and analysis_mode != "radar":
                     if self._cancel_flag:
-                        raise RuntimeError("Task cancelled")
+                        raise TaskCancelled("Task cancelled")
 
                     self._update_progress("rewrite", 3, 4, "生成爆款仿写...")
 
@@ -190,7 +210,7 @@ class TaskManager:
                 # Run cover if requested
                 if options.get("cover", False) and analysis_mode != "radar":
                     if self._cancel_flag:
-                        raise RuntimeError("Task cancelled")
+                        raise TaskCancelled("Task cancelled")
 
                     self._update_progress("cover", 3, 4, "生成封面方案...")
 
@@ -215,13 +235,102 @@ class TaskManager:
                         },
                     }
 
-            self._update_progress("done", 4, 4, "完成！")
+            # Persist outputs to out_dir (similar to CLI behavior).
+            try:
+                run_dir = self._save_outputs(query=query, results=results, options=options)
+                results["run_dir"] = str(run_dir)
+                self._update_progress("done", 4, 4, f"完成！已保存到: {run_dir}")
+            except Exception as e:
+                logger.warning("Failed to save outputs: %s", e)
+                self._update_progress("done", 4, 4, "完成！(保存输出失败)")
 
             return results
 
         except Exception as e:
+            if self._cancel_flag:
+                raise TaskCancelled("Task cancelled") from e
             logger.error(f"Task failed: {e}", exc_info=True)
             raise
+
+    def _save_outputs(self, *, query: str, results: dict[str, Any], options: dict[str, Any]) -> Path:
+        base_dir = Path(str(options.get("out_dir") or "outputs"))
+        run_id = f"{now_stamp()}_{slugify(query)}"
+        run_dir = base_dir / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Always save the full run result.
+        write_json(run_dir / "run.json", data=results)
+
+        mode = str(results.get("mode") or "hot")
+        if mode == "radar":
+            raw = str(results.get("raw_output") or "")
+            (run_dir / "radar_raw.txt").write_text(raw, encoding="utf-8-sig")
+
+            radar = parse_radar(raw)
+            if radar is None:
+                return run_dir
+
+            write_json(
+                run_dir / "radar.json",
+                data={
+                    "niches": radar.niches,
+                    "top3": radar.top3,
+                    "how_to_validate": radar.how_to_validate,
+                    "sources": radar.sources,
+                },
+            )
+            write_radar_markdown(run_dir / "radar.md", query=query, radar=radar)
+            write_radar_csv_bundle(run_dir, radar=radar)
+            return run_dir
+
+        # hot mode
+        raw = str(results.get("raw_output") or "")
+        (run_dir / "analysis_raw.txt").write_text(raw, encoding="utf-8-sig")
+        report = parse_report(raw)
+        write_json(
+            run_dir / "analysis.json",
+            data={"why_hot": report.why_hot, "structure": report.structure, "ideas": report.ideas, "sources": report.sources},
+        )
+        write_markdown(run_dir / "analysis.md", query=query, report=report)
+        write_csv_bundle(run_dir, stem="analysis", report=report)
+
+        if isinstance(results.get("rewrite"), dict):
+            raw_r = str(results["rewrite"].get("raw_output") or "")
+            (run_dir / "rewrite_raw.txt").write_text(raw_r, encoding="utf-8-sig")
+            rewrite = parse_rewrite(raw_r)
+            write_json(
+                run_dir / "rewrite.json",
+                data={
+                    "drafts": rewrite.drafts,
+                    "title_bank": rewrite.title_bank,
+                    "hooks": rewrite.hooks,
+                    "hashtags": rewrite.hashtags,
+                    "cta": rewrite.cta,
+                    "compliance_notes": rewrite.compliance_notes,
+                    "sources": report.sources,
+                },
+            )
+            write_rewrite_markdown(run_dir / "rewrite.md", query=query, rewrite=rewrite, sources=report.sources)
+            write_rewrite_csv_bundle(run_dir, rewrite=rewrite, sources=report.sources)
+
+        if isinstance(results.get("cover"), dict):
+            raw_c = str(results["cover"].get("raw_output") or "")
+            (run_dir / "cover_raw.txt").write_text(raw_c, encoding="utf-8-sig")
+            cover = parse_cover(raw_c)
+            write_json(
+                run_dir / "cover.json",
+                data={
+                    "cover_concepts": cover.cover_concepts,
+                    "shotlist": cover.shotlist,
+                    "canva_recipe": cover.canva_recipe,
+                    "image_prompt": cover.image_prompt,
+                    "sources": report.sources,
+                },
+            )
+            write_cover_markdown(run_dir / "cover.md", query=query, cover=cover, sources=report.sources)
+            write_cover_csv_bundle(run_dir, cover=cover, sources=report.sources)
+
+        return run_dir
 
     def run_batch_analysis(
         self,

@@ -52,6 +52,7 @@ class MainWindow(ctk.CTk):
 
         # State
         self.current_result: dict[str, Any] | None = None
+        self.current_record_id: int | None = None
         self.is_running = False
 
         # Create UI
@@ -66,8 +67,9 @@ class MainWindow(ctk.CTk):
         self.configure(fg_color=self.colors["background"])
 
         # Configure grid for left-right layout
-        self.grid_columnconfigure(0, weight=1, minsize=400)  # Left panel
-        self.grid_columnconfigure(1, weight=2)  # Right panel (wider)
+        # Keep the left panel compact so controls sit closer to the results.
+        self.grid_columnconfigure(0, weight=1, minsize=420)  # Left panel
+        self.grid_columnconfigure(1, weight=2)  # Right panel
         self.grid_rowconfigure(1, weight=1)
 
         # ===== HEADER (spans both columns) =====
@@ -128,10 +130,12 @@ class MainWindow(ctk.CTk):
     def _create_left_panel(self):
         """Create left control panel."""
         left_container = ctk.CTkFrame(self, fg_color="transparent")
-        left_container.grid(row=1, column=0, padx=(20, 10), pady=(0, 20), sticky="nsew")
-        left_container.grid_rowconfigure(0, weight=3)
-        left_container.grid_rowconfigure(1, weight=2)
-        left_container.grid_rowconfigure(2, weight=0)
+        left_container.grid(row=1, column=0, padx=(20, 8), pady=(0, 20), sticky="nsew")
+        # Ensure the inner frames expand to the full width of the left column.
+        left_container.grid_columnconfigure(0, weight=1)
+        left_container.grid_rowconfigure(0, weight=5)  # Input section - much taller
+        left_container.grid_rowconfigure(1, weight=4)  # Options section - taller
+        left_container.grid_rowconfigure(2, weight=0)  # Progress section
 
         # Query input section
         input_frame = ctk.CTkFrame(left_container, fg_color=self.colors["secondary"], corner_radius=20)
@@ -143,7 +147,7 @@ class MainWindow(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=self.colors["text_dark"]
         )
-        query_label.pack(anchor="w", padx=20, pady=(20, 10))
+        query_label.pack(anchor="w", padx=30, pady=(25, 15))
 
         self.query_textbox = ctk.CTkTextbox(
             input_frame,
@@ -153,7 +157,7 @@ class MainWindow(ctk.CTk):
             font=ctk.CTkFont(size=14),
             wrap="word"
         )
-        self.query_textbox.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.query_textbox.pack(fill="both", expand=True, padx=30, pady=(0, 25))
         self.query_textbox.insert("1.0", "最近有什么美食热点")
 
         # Options section
@@ -166,11 +170,11 @@ class MainWindow(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=self.colors["text_dark"]
         )
-        options_label.pack(anchor="w", padx=20, pady=(20, 15))
+        options_label.pack(anchor="w", padx=30, pady=(25, 15))
 
         # Checkboxes
         checkbox_container = ctk.CTkFrame(options_frame, fg_color="transparent")
-        checkbox_container.pack(fill="x", padx=20, pady=(0, 15))
+        checkbox_container.pack(fill="x", padx=30, pady=(0, 15))
 
         self.rewrite_var = ctk.BooleanVar(value=True)
         rewrite_cb = ctk.CTkCheckBox(
@@ -210,7 +214,7 @@ class MainWindow(ctk.CTk):
 
         # Mode selection
         mode_container = ctk.CTkFrame(options_frame, fg_color="transparent")
-        mode_container.pack(fill="x", padx=20, pady=(0, 15))
+        mode_container.pack(fill="x", padx=30, pady=(0, 15))
 
         mode_label = ctk.CTkLabel(
             mode_container,
@@ -239,7 +243,7 @@ class MainWindow(ctk.CTk):
 
         # Action buttons
         button_container = ctk.CTkFrame(options_frame, fg_color="transparent")
-        button_container.pack(fill="x", padx=20, pady=(0, 20))
+        button_container.pack(fill="x", padx=30, pady=(0, 25))
 
         self.start_btn = ctk.CTkButton(
             button_container,
@@ -320,7 +324,7 @@ class MainWindow(ctk.CTk):
             fg_color=self.colors["secondary"],
             corner_radius=20
         )
-        right_container.grid(row=1, column=1, padx=(10, 20), pady=(0, 20), sticky="nsew")
+        right_container.grid(row=1, column=1, padx=(8, 20), pady=(0, 20), sticky="nsew")
 
         # Result viewer
         self.result_viewer = ResultViewer(right_container, colors=self.colors)
@@ -382,6 +386,7 @@ class MainWindow(ctk.CTk):
             "cover_image": self.cover_image_var.get() and mode != "radar",
             "gemini_model": self.config_manager.get_setting("gemini_model"),
             "gemini_base_url": self.config_manager.get_setting("gemini_base_url"),
+            "gemini_api_key": self.config_manager.get_setting("gemini_api_key"),
             "minimax_model": self.config_manager.get_setting("minimax_model"),
             "minimax_base_url": self.config_manager.get_setting("minimax_base_url"),
             "analysis_temperature": self.config_manager.get_setting("analysis_temperature"),
@@ -398,18 +403,52 @@ class MainWindow(ctk.CTk):
 
         env_vars = self.config_manager.export_for_env()
 
+        # Create a pending history record immediately (so it appears before completion).
+        try:
+            pending = {
+                "mode": mode,
+                "query": query,
+                "status": "running",
+                "raw_output": "",
+                "parsed": {},
+            }
+            self.current_record_id = self.history_manager.save_record(
+                query=query,
+                result=pending,
+                metadata={"options": options},
+                status="running",
+            )
+        except Exception as e:
+            self.current_record_id = None
+            print(f"Failed to create pending history record: {e}")
+
         self.is_running = True
         self.start_btn.configure(state="disabled")
         self.cancel_btn.configure(state="normal")
         self.progress_bar.set(0)
         self.progress_label.configure(text="准备中...")
+        # Show placeholder immediately so radar mode doesn't look "stuck".
+        try:
+            self.result_viewer.analysis_textbox.delete("1.0", "end")
+            self.result_viewer.rewrite_textbox.delete("1.0", "end")
+            self.result_viewer.cover_textbox.delete("1.0", "end")
+            self.result_viewer.sources_textbox.delete("1.0", "end")
+            hint = "正在生成账号方向雷达（通常需要几十秒）..." if mode == "radar" else "正在分析（通常需要几十秒）..."
+            self.result_viewer.analysis_textbox.insert("1.0", hint)
+            self.result_viewer.tabview.set("分析")
+        except Exception:
+            pass
 
         def worker():
             try:
                 result = self.task_manager.run_analysis(query, options, env_vars)
                 self.after(0, lambda: self._on_analysis_complete(result))
             except Exception as e:
-                self.after(0, lambda: self._on_analysis_error(str(e)))
+                msg = str(e).lower()
+                if "cancel" in msg or "取消" in str(e):
+                    self.after(0, self._on_analysis_cancelled)
+                else:
+                    self.after(0, lambda: self._on_analysis_error(str(e)))
 
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
@@ -418,6 +457,13 @@ class MainWindow(ctk.CTk):
         """Cancel running analysis."""
         self.task_manager.cancel_task()
         self.progress_label.configure(text="正在取消...")
+        # Update UI immediately (best-effort); actual cancellation is cooperative.
+        self.cancel_btn.configure(state="disabled")
+        if self.current_record_id is not None:
+            try:
+                self.history_manager.update_record(self.current_record_id, status="cancelling")
+            except Exception:
+                pass
 
     def _on_progress_update(self, progress: dict[str, Any]):
         """Handle progress update."""
@@ -437,14 +483,16 @@ class MainWindow(ctk.CTk):
         self.progress_bar.set(1.0)
         self.progress_label.configure(text="完成！")
 
+        # Update pending history record (or create a new one if missing).
         try:
-            self.history_manager.save_record(
-                query=result.get("query", ""),
-                result=result,
-                metadata={"timestamp": str(Path.cwd())},
-            )
+            if self.current_record_id is not None:
+                self.history_manager.update_record(self.current_record_id, result=result, status="completed")
+            else:
+                self.history_manager.save_record(query=result.get("query", ""), result=result, status="completed")
         except Exception as e:
-            print(f"Failed to save history: {e}")
+            print(f"Failed to update history: {e}")
+        finally:
+            self.current_record_id = None
 
         self.current_result = result
         self.result_viewer.display_result(result)
@@ -457,8 +505,43 @@ class MainWindow(ctk.CTk):
         self.progress_bar.set(0)
         self.progress_label.configure(text="错误")
 
+        if self.current_record_id is not None:
+            try:
+                failed = {
+                    "mode": self.mode_var.get(),
+                    "query": self.query_textbox.get("1.0", "end-1c").strip(),
+                    "status": "failed",
+                    "error": error,
+                }
+                self.history_manager.update_record(self.current_record_id, result=failed, status="failed")
+            except Exception:
+                pass
+            finally:
+                self.current_record_id = None
+
         from tkinter import messagebox
         messagebox.showerror("分析失败", f"分析过程中出现错误：\n\n{error}")
+
+    def _on_analysis_cancelled(self):
+        """Handle analysis cancelled."""
+        self.is_running = False
+        self.start_btn.configure(state="normal")
+        self.cancel_btn.configure(state="disabled")
+        self.progress_bar.set(0)
+        self.progress_label.configure(text="已取消")
+
+        if self.current_record_id is not None:
+            try:
+                cancelled = {
+                    "mode": self.mode_var.get(),
+                    "query": self.query_textbox.get("1.0", "end-1c").strip(),
+                    "status": "cancelled",
+                }
+                self.history_manager.update_record(self.current_record_id, result=cancelled, status="cancelled")
+            except Exception:
+                pass
+            finally:
+                self.current_record_id = None
 
     def _load_history_record(self, record: dict[str, Any]):
         """Load and display history record."""

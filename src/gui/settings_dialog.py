@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import threading
+
 import customtkinter as ctk
 
 from ..core.config_manager import ConfigManager
@@ -108,6 +111,19 @@ class SettingsDialog(ctk.CTkToplevel):
         self.minimax_key_entry = ctk.CTkEntry(minimax_frame, show="*", width=500)
         self.minimax_key_entry.pack(padx=10, pady=(0, 10))
 
+        # Gemini Proxy API Key (optional)
+        gemini_key_frame = ctk.CTkFrame(tab)
+        gemini_key_frame.pack(fill="x", padx=10, pady=10)
+
+        gemini_key_label = ctk.CTkLabel(
+            gemini_key_frame,
+            text="Gemini 中转站 API Key (可选，sk- 开头时填这里):"
+        )
+        gemini_key_label.pack(anchor="w", padx=10, pady=(10, 5))
+
+        self.gemini_api_key_entry = ctk.CTkEntry(gemini_key_frame, show="*", width=500)
+        self.gemini_api_key_entry.pack(padx=10, pady=(0, 10))
+
         # Gemini Base URL (for proxy/relay)
         gemini_url_frame = ctk.CTkFrame(tab)
         gemini_url_frame.pack(fill="x", padx=10, pady=10)
@@ -128,6 +144,38 @@ class SettingsDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         )
         gemini_url_hint.pack(anchor="w", padx=10, pady=(0, 10))
+
+        # Gemini auth mode (proxy compatibility)
+        auth_frame = ctk.CTkFrame(tab)
+        auth_frame.pack(fill="x", padx=10, pady=10)
+
+        auth_label = ctk.CTkLabel(auth_frame, text="Gemini Auth Mode (optional):")
+        auth_label.pack(anchor="w", padx=10, pady=(10, 5))
+
+        self.gemini_auth_mode_var = ctk.StringVar(value="auto")
+        auth_menu = ctk.CTkOptionMenu(
+            auth_frame,
+            variable=self.gemini_auth_mode_var,
+            values=["auto", "query", "header", "bearer"],
+            width=200,
+        )
+        auth_menu.pack(anchor="w", padx=10, pady=(0, 10))
+
+        # Debug / Connectivity
+        debug_frame = ctk.CTkFrame(tab)
+        debug_frame.pack(fill="x", padx=10, pady=10)
+
+        debug_label = ctk.CTkLabel(debug_frame, text="Debug:")
+        debug_label.pack(anchor="w", padx=10, pady=(10, 5))
+
+        btn_row = ctk.CTkFrame(debug_frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=10, pady=(0, 10))
+
+        show_btn = ctk.CTkButton(btn_row, text="Show effective Gemini config", command=self._show_effective_gemini)
+        show_btn.pack(side="left", padx=(0, 10))
+
+        test_btn = ctk.CTkButton(btn_row, text="Test Gemini connection", command=self._test_gemini_connection)
+        test_btn.pack(side="left")
 
         # Help text
         help_label = ctk.CTkLabel(
@@ -281,6 +329,10 @@ class SettingsDialog(ctk.CTkToplevel):
 
         # Gemini Base URL
         self.gemini_base_url_entry.insert(0, self.config_manager.get_setting("gemini_base_url", ""))
+        if hasattr(self, "gemini_api_key_entry"):
+            self.gemini_api_key_entry.insert(0, self.config_manager.get_setting("gemini_api_key", ""))
+        if hasattr(self, "gemini_auth_mode_var"):
+            self.gemini_auth_mode_var.set(self.config_manager.get_setting("gemini_auth_mode", "auto"))
 
         # Model Configuration
         self.gemini_model_entry.insert(0, self.config_manager.get_setting("gemini_model", "gemini-2.5-flash"))
@@ -311,6 +363,10 @@ class SettingsDialog(ctk.CTkToplevel):
 
             # Save Gemini base URL
             self.config_manager.set_setting("gemini_base_url", self.gemini_base_url_entry.get().strip())
+            if hasattr(self, "gemini_api_key_entry"):
+                self.config_manager.set_setting("gemini_api_key", self.gemini_api_key_entry.get().strip())
+            if hasattr(self, "gemini_auth_mode_var"):
+                self.config_manager.set_setting("gemini_auth_mode", self.gemini_auth_mode_var.get().strip())
 
             # Save model configuration
             self.config_manager.set_setting("gemini_model", self.gemini_model_entry.get().strip())
@@ -337,15 +393,138 @@ class SettingsDialog(ctk.CTkToplevel):
             # Validate
             is_valid, error_msg = self.config_manager.validate_config()
             if not is_valid:
-                ctk.CTkMessagebox(title="配置警告", message=error_msg)
+                from tkinter import messagebox
+
+                messagebox.showwarning("配置警告", error_msg)
             else:
-                ctk.CTkMessagebox(title="成功", message="设置已保存")
+                from tkinter import messagebox
+
+                messagebox.showinfo("成功", "设置已保存")
                 self.destroy()
 
         except ValueError as e:
-            ctk.CTkMessagebox(title="输入错误", message=f"请检查输入值：{e}")
+            from tkinter import messagebox
+
+            messagebox.showerror("输入错误", f"请检查输入值：{e}")
         except Exception as e:
-            ctk.CTkMessagebox(title="保存失败", message=f"保存设置时出错：{e}")
+            from tkinter import messagebox
+
+            messagebox.showerror("保存失败", f"保存设置时出错：{e}")
+
+    def _mask_secret(self, value: str) -> str:
+        v = (value or "").strip()
+        if not v:
+            return ""
+        if len(v) <= 10:
+            return v[:2] + "***" + v[-2:]
+        return v[:6] + "***" + v[-4:]
+
+    def _get_effective_gemini_config(self) -> dict[str, str]:
+        base_url = (self.gemini_base_url_entry.get() or "").strip()
+        model = (self.gemini_model_entry.get() or "").strip()
+
+        auth_mode = "auto"
+        if hasattr(self, "gemini_auth_mode_var"):
+            auth_mode = (self.gemini_auth_mode_var.get() or "auto").strip().lower()
+
+        proxy_key = ""
+        if hasattr(self, "gemini_api_key_entry"):
+            proxy_key = (self.gemini_api_key_entry.get() or "").strip()
+        google_key = (self.google_key_entry.get() or "").strip()
+
+        route = "proxy" if base_url else "official"
+        key_used = proxy_key or google_key
+        endpoint = f"{base_url.rstrip('/')}/{model}:generateContent" if base_url and model else ""
+
+        return {
+            "route": route,
+            "model": model,
+            "base_url": base_url,
+            "endpoint": endpoint,
+            "auth_mode": auth_mode,
+            "key_source": "gemini_proxy_key" if proxy_key else ("google_key" if google_key else ""),
+            "key_used": self._mask_secret(key_used),
+        }
+
+    def _show_effective_gemini(self) -> None:
+        from tkinter import messagebox
+
+        cfg = self._get_effective_gemini_config()
+        lines = [
+            f"route: {cfg['route']}",
+            f"model: {cfg['model'] or '(empty)'}",
+            f"base_url: {cfg['base_url'] or '(empty)'}",
+            f"auth_mode: {cfg['auth_mode']}",
+            f"key_source: {cfg['key_source'] or '(none)'}",
+            f"key_used: {cfg['key_used'] or '(empty)'}",
+        ]
+        if cfg["endpoint"]:
+            lines.append(f"endpoint: {cfg['endpoint']}")
+        messagebox.showinfo("Gemini config", "\n".join(lines))
+
+    def _test_gemini_connection(self) -> None:
+        from tkinter import messagebox
+
+        cfg = self._get_effective_gemini_config()
+        base_url = cfg["base_url"]
+        model = cfg["model"]
+        auth_mode = cfg["auth_mode"]
+
+        proxy_key = ""
+        if hasattr(self, "gemini_api_key_entry"):
+            proxy_key = (self.gemini_api_key_entry.get() or "").strip()
+        google_key = (self.google_key_entry.get() or "").strip()
+        api_key = proxy_key or google_key
+
+        if not model:
+            messagebox.showerror("Test failed", "Gemini model is empty.")
+            return
+
+        def worker() -> None:
+            try:
+                if base_url:
+                    from langchain_core.messages import HumanMessage, SystemMessage
+
+                    from ..llms import GeminiGenerateContentClient
+
+                    client = GeminiGenerateContentClient(
+                        api_key=api_key,
+                        base_url=base_url,
+                        model=model,
+                        auth_mode=auth_mode,
+                        temperature=0.0,
+                        timeout_s=20.0,
+                        max_retries=0,
+                    )
+                    text = client.invoke(
+                        [
+                            SystemMessage(content="Health check. Reply with OK."),
+                            HumanMessage(content="OK"),
+                        ]
+                    )
+                else:
+                    # Official API test (requires GOOGLE_API_KEY).
+                    from langchain_core.messages import HumanMessage
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+
+                    old = os.environ.get("GOOGLE_API_KEY")
+                    try:
+                        if google_key:
+                            os.environ["GOOGLE_API_KEY"] = google_key
+                        llm = ChatGoogleGenerativeAI(model=model, temperature=0.0)
+                        resp = llm.invoke([HumanMessage(content="Reply with OK.")])
+                        text = str(getattr(resp, "content", resp))
+                    finally:
+                        if old is None:
+                            os.environ.pop("GOOGLE_API_KEY", None)
+                        else:
+                            os.environ["GOOGLE_API_KEY"] = old
+
+                self.after(0, lambda: messagebox.showinfo("Test OK", f"Response:\n{text[:500]}"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Test failed", str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _reset_to_defaults(self):
         """Reset settings to defaults."""
@@ -371,4 +550,6 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self._load_settings()
 
-        ctk.CTkMessagebox(title="成功", message="已恢复默认设置（API密钥已保留）")
+        from tkinter import messagebox
+
+        messagebox.showinfo("成功", "已恢复默认设置（API密钥已保留）")

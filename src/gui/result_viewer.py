@@ -404,9 +404,13 @@ class ResultViewer(ctk.CTkFrame):
                 with open(filename, "w", encoding="utf-8") as f:
                     json.dump(self.current_result, f, ensure_ascii=False, indent=2)
 
-                ctk.CTkMessagebox(title="成功", message=f"已导出到：\n{filename}")
+                from tkinter import messagebox
+
+                messagebox.showinfo("成功", f"已导出到：\n{filename}")
             except Exception as e:
-                ctk.CTkMessagebox(title="导出失败", message=f"导出时出错：{e}")
+                from tkinter import messagebox
+
+                messagebox.showerror("导出失败", f"导出时出错：{e}")
 
     def _copy_current(self):
         """Copy current tab content to clipboard."""
@@ -425,4 +429,6 @@ class ResultViewer(ctk.CTkFrame):
             self.clipboard_clear()
             self.clipboard_append(content)
 
-            ctk.CTkMessagebox(title="成功", message="已复制到剪贴板")
+            from tkinter import messagebox
+
+            messagebox.showinfo("成功", "已复制到剪贴板")
