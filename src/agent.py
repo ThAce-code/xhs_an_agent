@@ -11,10 +11,20 @@ from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from .llms import GeminiGenerateContentClient, MiniMaxChatClient
-from .prompts import COVER_PROMPT, RADAR_PROMPT, REWRITE_PROMPT, SYSTEM_PROMPT
+from .prompts import (
+    get_analysis_system_prompt,
+    get_cover_system_prompt,
+    get_rewrite_system_prompt,
+)
 from .retrieval import RankedSearch, multi_search_and_rank
 from .reporting import extract_text
 from .tools import build_tools
+from .validation import (
+    validate_analysis_output,
+    validate_cover_output,
+    validate_radar_output,
+    validate_rewrite_output,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +44,59 @@ class MVPExecutor:
     verbose: bool = True
     max_iterations: int = 6
 
+    def _validate_and_repair(
+        self,
+        *,
+        kind: str,
+        mode: str,
+        system_prompt: str,
+        base_prompt: str,
+        text: str,
+        allowed_source_ids: set[int],
+    ) -> str:
+        """Validate model output and (optionally) run a single repair retry."""
+        retries_s = (os.getenv("XHS_VALIDATE_RETRIES") or "1").strip()
+        try:
+            retries = max(0, int(retries_s))
+        except Exception:
+            retries = 1
+
+        def _validate(current: str) -> tuple[bool, str, str]:
+            if kind == "rewrite":
+                return validate_rewrite_output(current, allowed_source_ids=allowed_source_ids)
+            if kind == "cover":
+                return validate_cover_output(current, allowed_source_ids=allowed_source_ids)
+            # analysis kind
+            if mode == "radar":
+                return validate_radar_output(current, allowed_source_ids=allowed_source_ids)
+            return validate_analysis_output(current, allowed_source_ids=allowed_source_ids)
+
+        ok, cleaned, err = _validate(text)
+        if ok:
+            return cleaned or text
+
+        # One or more repair attempts (default 1).
+        last = text
+        last_err = err
+        for _ in range(retries):
+            self._check_cancelled()
+            repair_prompt = (
+                f"{base_prompt}\n\n"
+                "你的上一次输出没有通过程序校验，需要修复后重新输出。\n"
+                f"校验错误：{last_err}\n"
+                f"允许的 sources.id：{sorted(allowed_source_ids)}\n\n"
+                "上一次输出（无效，仅供修复参考）：\n"
+                f"{last}\n\n"
+                "请仅返回修复后的 JSON 对象（不要 Markdown、不要解释、不要代码块、不要新增 URL/来源）。"
+            )
+            last = self._chat([SystemMessage(content=system_prompt), HumanMessage(content=repair_prompt)], kind=kind)
+            ok2, cleaned2, err2 = _validate(last)
+            if ok2:
+                return cleaned2 or last
+            last_err = err2
+
+        raise RuntimeError(f"Model output validation failed: {last_err}")
+
     def _check_cancelled(self) -> None:
         if callable(self.should_cancel) and self.should_cancel():
             raise RuntimeError("Task cancelled")
@@ -45,6 +108,7 @@ class MVPExecutor:
 
         self._check_cancelled()
         analysis_mode = inputs.get("analysis_mode")
+        style_preset = inputs.get("style_preset") or os.getenv("XHS_STYLE_PRESET")
         days = inputs.get("days")
         lang = inputs.get("lang")
         region = inputs.get("region")
@@ -65,6 +129,7 @@ class MVPExecutor:
             str(user_input),
             str(search_query),
             analysis_mode=str(analysis_mode) if isinstance(analysis_mode, str) and analysis_mode.strip() else None,
+            style_preset=str(style_preset) if isinstance(style_preset, str) and style_preset.strip() else None,
             days=int(days) if isinstance(days, int) else None,
             lang=str(lang) if isinstance(lang, str) and lang.strip() else None,
             region=str(region) if isinstance(region, str) and region.strip() else None,
@@ -101,7 +166,9 @@ class MVPExecutor:
                 raise RuntimeError(f"Both primary and fallback models failed. primary={e}; fallback={e2}") from e2
 
     def _run_tool_loop(self, user_input: str) -> str:
-        messages: list[Any] = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_input)]
+        style_preset = (os.getenv("XHS_STYLE_PRESET") or "").strip() or None
+        sys_prompt = get_analysis_system_prompt(mode="hot", style_preset=style_preset)
+        messages: list[Any] = [SystemMessage(content=sys_prompt), HumanMessage(content=user_input)]
 
         for _ in range(self.max_iterations):
             ai_msg = self.llm_with_tools.invoke(messages)
@@ -138,6 +205,7 @@ class MVPExecutor:
         search_query: str,
         *,
         analysis_mode: str | None,
+        style_preset: str | None,
         days: int | None,
         lang: str | None,
         region: str | None,
@@ -177,9 +245,16 @@ class MVPExecutor:
             "queries": ranked.queries,
             "sources": ranked.sources,
         }
+        allowed_source_ids: set[int] = set()
+        for s in ranked.sources or []:
+            try:
+                sid = int((s or {}).get("id"))  # type: ignore[call-overload]
+            except Exception:
+                continue
+            allowed_source_ids.add(sid)
 
         mode = (analysis_mode or "").strip().lower() or "hot"
-        system_prompt = RADAR_PROMPT if mode == "radar" else SYSTEM_PROMPT
+        system_prompt = get_analysis_system_prompt(mode=mode, style_preset=style_preset)
         prompt = (
             "用户问题：\n"
             f"{user_input}\n\n"
@@ -189,10 +264,26 @@ class MVPExecutor:
         )
 
         text = self._chat([SystemMessage(content=system_prompt), HumanMessage(content=prompt)], kind="analysis")
+        text = self._validate_and_repair(
+            kind="analysis",
+            mode=mode,
+            system_prompt=system_prompt,
+            base_prompt=prompt,
+            text=text,
+            allowed_source_ids=allowed_source_ids,
+        )
         return text, ranked
 
     def run_rewrite(self, *, user_query: str, analysis_json: dict[str, Any], sources: list[dict[str, Any]]) -> str:
         """Generate '爆款仿写' assets from the already-retrieved sources."""
+        style_preset = (os.getenv("XHS_STYLE_PRESET") or "").strip() or None
+        allowed_source_ids: set[int] = set()
+        for s in sources or []:
+            try:
+                sid = int((s or {}).get("id"))  # type: ignore[call-overload]
+            except Exception:
+                continue
+            allowed_source_ids.add(sid)
 
         brief = {
             "analysis": analysis_json,
@@ -214,10 +305,27 @@ class MVPExecutor:
             f"{json.dumps(brief, ensure_ascii=False)}\n\n"
             "请输出 3 个【中篇】草稿（400–600 字），并给出标题库/钩子/标签/CTA/合规提示。"
         )
-        return self._chat([SystemMessage(content=REWRITE_PROMPT), HumanMessage(content=prompt)], kind="rewrite")
+        sys_prompt = get_rewrite_system_prompt(style_preset=style_preset)
+        text = self._chat([SystemMessage(content=sys_prompt), HumanMessage(content=prompt)], kind="rewrite")
+        return self._validate_and_repair(
+            kind="rewrite",
+            mode="hot",
+            system_prompt=sys_prompt,
+            base_prompt=prompt,
+            text=text,
+            allowed_source_ids=allowed_source_ids,
+        )
 
     def run_cover(self, *, user_query: str, analysis_json: dict[str, Any], sources: list[dict[str, Any]]) -> str:
         """Generate '封面导演' plan (photo-quality oriented) from sources."""
+        style_preset = (os.getenv("XHS_STYLE_PRESET") or "").strip() or None
+        allowed_source_ids: set[int] = set()
+        for s in sources or []:
+            try:
+                sid = int((s or {}).get("id"))  # type: ignore[call-overload]
+            except Exception:
+                continue
+            allowed_source_ids.add(sid)
 
         brief = {
             "analysis": analysis_json,
@@ -239,7 +347,16 @@ class MVPExecutor:
             f"{json.dumps(brief, ensure_ascii=False)}\n\n"
             "请输出 3 套【质感拍摄向】封面方案（比例 3:4）。"
         )
-        return self._chat([SystemMessage(content=COVER_PROMPT), HumanMessage(content=prompt)], kind="cover")
+        sys_prompt = get_cover_system_prompt(style_preset=style_preset)
+        text = self._chat([SystemMessage(content=sys_prompt), HumanMessage(content=prompt)], kind="cover")
+        return self._validate_and_repair(
+            kind="cover",
+            mode="hot",
+            system_prompt=sys_prompt,
+            base_prompt=prompt,
+            text=text,
+            allowed_source_ids=allowed_source_ids,
+        )
 
 
 def build_agent_executor(
