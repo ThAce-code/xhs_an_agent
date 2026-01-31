@@ -224,11 +224,11 @@ class MainWindow(ctk.CTk):
         )
         mode_label.pack(side="left", padx=(0, 10))
 
-        self.mode_var = ctk.StringVar(value="hot")
+        self.mode_var = ctk.StringVar(value=str(self.config_manager.get_setting("analysis_mode", "hot") or "hot").strip().lower() or "hot")
         mode_menu = ctk.CTkOptionMenu(
             mode_container,
             variable=self.mode_var,
-            values=["热点分析", "账号雷达"],
+            values=["hot", "new", "trend", "radar"],
             command=self._on_mode_change,
             fg_color=self.colors["input_bg"],
             button_color=self.colors["primary"],
@@ -240,6 +240,10 @@ class MainWindow(ctk.CTk):
             width=120
         )
         mode_menu.pack(side="left")
+
+
+        # Apply mode-dependent defaults (e.g. radar disables rewrite/cover).
+        self._on_mode_change(self.mode_var.get())
 
         # Action buttons
         button_container = ctk.CTkFrame(options_frame, fg_color="transparent")
@@ -355,14 +359,28 @@ class MainWindow(ctk.CTk):
 
     def _on_mode_change(self, mode: str):
         """Handle mode change."""
-        if mode == "账号雷达":
-            self.mode_var.set("radar")
+        mode = (mode or "").strip().lower() or "hot"
+        if mode not in {"hot", "new", "trend", "radar"}:
+            mode = "hot"
+
+        # Persist selection (best-effort; don't block UI on disk errors).
+        try:
+            current = str(self.config_manager.get_setting("analysis_mode", "hot") or "hot").strip().lower() or "hot"
+            if current != mode:
+                self.config_manager.set_setting("analysis_mode", mode)
+                self.config_manager.save_config()
+        except Exception:
+            pass
+
+        # Keep the option menu value consistent with internal mode.
+        if self.mode_var.get() != mode:
+            self.mode_var.set(mode)
+
+        if mode == "radar":
+            # Radar mode does not support rewrite/cover.
             self.rewrite_var.set(False)
             self.cover_var.set(False)
             self.cover_image_var.set(False)
-        else:
-            self.mode_var.set("hot")
-
     def _start_analysis(self):
         """Start analysis task."""
         query = self.query_textbox.get("1.0", "end-1c").strip()
@@ -556,11 +574,11 @@ class MainWindow(ctk.CTk):
         self.query_textbox.delete("1.0", "end")
         self.query_textbox.insert("1.0", full_record["query"])
 
-        mode = result.get("mode", "hot")
-        if mode == "radar":
-            self.mode_var.set("radar")
-        else:
-            self.mode_var.set("hot")
+        mode = str(result.get("mode") or "hot").strip().lower()
+        if mode not in {"hot", "new", "trend", "radar"}:
+            mode = "hot"
+        self.mode_var.set(mode)
+        self._on_mode_change(mode)
 
     def on_closing(self):
         """Handle window closing."""

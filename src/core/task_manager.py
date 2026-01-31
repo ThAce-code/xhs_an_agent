@@ -164,7 +164,7 @@ class TaskManager:
                     ]
 
                 results = {
-                    "mode": "hot",
+                    "mode": analysis_mode,
                     "query": query,
                     "raw_output": raw_output,
                     "parsed": {

@@ -171,7 +171,7 @@ class ResultViewer(ctk.CTkFrame):
         parsed = result.get("parsed", {})
 
         # Format analysis
-        analysis_text = self._format_hot_analysis(parsed)
+        analysis_text = self._format_hot_analysis(parsed, mode=str(result.get("mode", "hot")))
         self.analysis_textbox.insert("1.0", analysis_text)
 
         # Display rewrite if available
@@ -200,7 +200,7 @@ class ResultViewer(ctk.CTkFrame):
         self.rewrite_textbox.insert("1.0", "雷达模式不支持仿写功能")
         self.cover_textbox.insert("1.0", "雷达模式不支持封面功能")
 
-    def _format_hot_analysis(self, parsed: dict[str, Any]) -> str:
+    def _format_hot_analysis(self, parsed: dict[str, Any], *, mode: str = "hot") -> str:
         """Format hot analysis for display.
 
         Args:
@@ -213,6 +213,8 @@ class ResultViewer(ctk.CTkFrame):
         lines.append("=" * 60)
         lines.append("📊 热点分析报告")
         lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"mode: {mode}")
         lines.append("")
 
         # Why hot
